@@ -55,7 +55,7 @@ export class AwsMicroServicesStack extends Stack {
     productApi.addMethod('POST'); // POST '/product
 
     
-    const singleProductApi = productApi.addResource('{id');
+    const singleProductApi = productApi.addResource('{id}');
     singleProductApi.addMethod('GET'); // GET '/product/{id}
     singleProductApi.addMethod('PUT'); // PUT '/product/{id}
     singleProductApi.addMethod('DELETE'); // DELETE '/product/{id}
