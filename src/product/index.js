@@ -1,4 +1,4 @@
-const { GetItemCommand, ScanCommand, PutItemCommand, UpdateItemCommand, DeleteItemCommand } = require('@aws-sdk/client-dynamodb');
+const { GetItemCommand, ScanCommand, PutItemCommand, UpdateItemCommand, DeleteItemCommand, QueryCommand } = require('@aws-sdk/client-dynamodb');
 const { marshall, unmarshall } = require('@aws-sdk/util-dynamodb');
 const { ddbClient } = require('./ddbClient');
 const { v4: uuidv4 } = require('uuid');
@@ -101,29 +101,74 @@ const getAllProducts = async () => {
         throw e;
     }
 }
-exports.handler = async (event) => {
-    console.log(event)
-    switch (event.httpMethod) {
-        case "GET":
-            if (event.pathParameter != null) {
-                body = await getProduct(event.pathParameter.id)
-            } else {
-                body = await getAllProducts()
-            }
-        case "POST":
-            body = await createProduct(event); // POST /product
-            break;
-        case "DELETE":
-            body = await deleteProduct(event.pathParameters.id); // DELETE /product/{id}
-            break;
-        case "PUT":
-            body = await updateProduct(event); // PUT /product/{id}
-            break;
-        default:
-            throw new Error(`Unsupported route: "${event.httpMethod}"`);
-    }
-    return {
-        statusCode: 200,
-        body
+
+const getProductsByCategory = async (event) => {
+    console.log("getProductsByCategory");
+    try {
+        // GET product/1234?category=Phone
+        const productId = event.pathParameters.id;
+        const category = event.queryStringParameters.category;
+
+        const params = {
+            KeyConditionExpression: "id = :productId",
+            FilterExpression: "contains (category, :category)",
+            ExpressionAttributeValues: {
+                ":productId": { S: productId },
+                ":category": { S: category }
+            },
+            TableName: process.env.DYNAMODB_TABLE_NAME
+        };
+
+        const { Items } = await ddbClient.send(new QueryCommand(params));
+
+        console.log(Items);
+        return Items.map((item) => unmarshall(item));
+    } catch (e) {
+        console.error(e);
+        throw e;
     }
 }
+exports.handler = async (event) => {
+    console.log(event)
+    try {
+        switch (event.httpMethod) {
+            case "GET":
+                if (event.queryStringParameters != null) {
+                    body = await getProductsByCategory(event); // GET product/1234?category=Phone
+                }
+                else if (event.pathParameters != null) {
+                    body = await getProduct(event.pathParameters.id); // GET product/{id}
+                } else {
+                    body = await getAllProducts(); // GET product
+                }
+                break;
+            case "POST":
+                body = await createProduct(event); // POST /product
+                break;
+            case "DELETE":
+                body = await deleteProduct(event.pathParameters.id); // DELETE /product/{id}
+                break;
+            case "PUT":
+                body = await updateProduct(event); // PUT /product/{id}
+                break;
+            default:
+                throw new Error(`Unsupported route: "${event.httpMethod}"`);
+        }
+        return {
+            statusCode: 200,
+            body: JSON.stringify({
+                message: `Successfully finished operation: "${event.httpMethod}"`,
+                body: body
+            })
+        }
+    } catch (e) {
+        return {
+            statusCode: 500,
+            body: JSON.stringify({
+                message: "Failed to perform operation.",
+                errorMsg: e.message,
+                errorStack: e.stack,
+            })
+        };
+    }
+} 
